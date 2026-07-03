@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Chen-Pang He (https://jdh8.org)"]
 edition = "2024"
 rust-version = "1.93"
-description = "Game engine and data types for gin rummy"
+description = "Cards, melds, deadwood solver, and rules-driven state machine for gin rummy"
 repository = "https://github.com/jdh8/gin-rummy"
 homepage = "https://github.com/jdh8/gin-rummy"
 documentation = "https://docs.rs/gin-rummy"
@@ -18,7 +18,7 @@ all-features = true
 
 [features]
 # Shuffled dealing: the `Deck` type plus `Round::deal` and `Game::deal`.
-# Off by default so the core engine stays dependency-free.
+# Off by default so the core crate stays dependency-free.
 rand = ["dep:rand"]
 # Serialization for every public type, including mid-game `Round` snapshots
 # (validated on deserialization, so a corrupt snapshot cannot break invariants).

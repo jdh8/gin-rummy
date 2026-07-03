@@ -4,7 +4,7 @@
 [![Docs.rs](https://docs.rs/gin-rummy/badge.svg)](https://docs.rs/gin-rummy)
 [![Build Status](https://github.com/jdh8/gin-rummy/actions/workflows/rust.yml/badge.svg)](https://github.com/jdh8/gin-rummy)
 
-This crate is a game engine for [gin rummy]: strongly typed cards and melds,
+This crate models the mechanics of [gin rummy]: strongly typed cards and melds,
 an exact deadwood solver, and a rules-driven state machine for complete
 two-player rounds and games.
 

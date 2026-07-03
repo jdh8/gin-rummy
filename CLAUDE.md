@@ -1,8 +1,10 @@
 # gin-rummy
 
-This crate is a game engine for gin rummy: card and meld types, an optimal
-deadwood solver, a per-deal `Round` state machine, and a `Game` scoreboard
-with configurable scoring rules.  It mirrors the card-modeling patterns of my
+This crate implements the game mechanics of gin rummy: card and meld types, an
+optimal deadwood solver, a per-deal `Round` state machine, and a `Game`
+scoreboard with configurable scoring rules.  Gameplay strategy (move selection,
+opponent AI) is out of scope here and is planned for a separate
+`gin-rummy-engine` crate.  It mirrors the card-modeling patterns of my
 [contract-bridge](https://crates.io/crates/contract-bridge) crate, but the
 rank encoding here is ace-LOW (A = 1, K = 13) because gin runs are A-2-3 and
 never Q-K-A; the two crates deliberately share no code.
