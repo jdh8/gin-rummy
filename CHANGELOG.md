@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — Unreleased
+
+### Internal
+
+- Recorded the design rationale — scope, bitset layout, solver bounds,
+  `Round` and serde-validation decisions, and the variant roadmap — in
+  `docs/DESIGN.md`.
+- Expanded `CLAUDE.md` into a maintainer handbook: crate map, invariants,
+  house style, and a CI-mirroring verification checklist.
+- Added project skills for the release ritual and for adding rule variants
+  under `.claude/skills/`.
+
 ## [0.1.0] — 2026-07-04
 
 ### Added
