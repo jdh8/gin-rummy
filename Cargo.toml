@@ -1,0 +1,50 @@
+[package]
+name = "gin-rummy"
+version = "0.1.0"
+authors = ["Chen-Pang He (https://jdh8.org)"]
+edition = "2024"
+rust-version = "1.93"
+description = "Game engine and data types for gin rummy"
+repository = "https://github.com/jdh8/gin-rummy"
+homepage = "https://github.com/jdh8/gin-rummy"
+documentation = "https://docs.rs/gin-rummy"
+readme = "README.md"
+license = "Apache-2.0"
+categories = ["game-development", "games"]
+keywords = ["gin", "rummy", "card-game", "cards"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+# Shuffled dealing: the `Deck` type plus `Round::deal` and `Game::deal`.
+# Off by default so the core engine stays dependency-free.
+rand = ["dep:rand"]
+# Serialization for every public type, including mid-game `Round` snapshots
+# (validated on deserialization, so a corrupt snapshot cannot break invariants).
+serde = ["dep:serde", "dep:serde_with"]
+
+[dependencies]
+rand = { version = "0.10", optional = true }
+serde = { version = "1.0.225", features = ["derive"], optional = true }
+serde_with = { version = "3.15", default-features = false, features = ["macros"], optional = true }
+thiserror = "2"
+
+[dev-dependencies]
+anyhow = "1.0.98"
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+proptest = { version = "1.9", default-features = false, features = ["std"] }
+serde_json = "1.0.145"
+
+[[bench]]
+name = "deadwood"
+harness = false
+
+# Auto-discovery would hide this example from `cargo run --example` listings
+# when the feature is off; the explicit entry documents the requirement.
+[[example]]
+name = "simulate"
+required-features = ["rand"]
+
+[profile.dev.package."*"]
+opt-level = 2
