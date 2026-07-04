@@ -1,6 +1,6 @@
 [package]
 name = "gin-rummy"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Chen-Pang He (https://jdh8.org)"]
 edition = "2024"
 rust-version = "1.93"
@@ -12,6 +12,7 @@ readme = "README.md"
 license = "Apache-2.0"
 categories = ["game-development", "games"]
 keywords = ["gin", "rummy", "card-game", "cards"]
+exclude = [".claude/", "CLAUDE.md", "docs/"]
 
 [package.metadata.docs.rs]
 all-features = true
