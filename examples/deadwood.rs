@@ -4,7 +4,7 @@
 //!
 //! ```console
 //! $ cargo run --example deadwood -- "A23.456.789.T"
-//! A23.456.789.T: ♣A♣2♣3 ♦4♦5♦6 ♥7♥8♥9 | ♠T (10 deadwood)
+//! A23.456.789.T: A♣2♣3♣ 4♦5♦6♦ 7♥8♥9♥ | T♠ (10 deadwood)
 //! ```
 
 use gin_rummy::{Hand, best_melds};

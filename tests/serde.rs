@@ -18,13 +18,13 @@ fn encoding_shapes() {
     assert_eq!(json!(Rank::K), json!(13));
 
     // Display-backed types serialize as their text form.
-    assert_eq!(json!("♠A".parse::<Card>().unwrap()), json!("♠A"));
+    assert_eq!(json!("♠A".parse::<Card>().unwrap()), json!("A♠"));
     assert_eq!(json!("A23".parse::<Holding>().unwrap()), json!("A23"));
     assert_eq!(
         json!("A23.456.789.T".parse::<Hand>().unwrap()),
         json!("A23.456.789.T")
     );
-    assert_eq!(json!("♠5♠6♠7".parse::<Meld>().unwrap()), json!("♠5♠6♠7"));
+    assert_eq!(json!("♠5♠6♠7".parse::<Meld>().unwrap()), json!("5♠6♠7♠"));
 
     // Aggregates serialize by field.
     let result = RoundResult::Gin {

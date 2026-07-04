@@ -179,9 +179,12 @@ pub struct Card {
     pub rank: Rank,
 }
 
+/// The rank then the suit, e.g. `T♥`.  Rank leads because in gin rummy, as
+/// in poker, the rank carries most of the information; parsing still accepts
+/// either order (see the [`FromStr`] impl).
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.suit, self.rank)
+        write!(f, "{}{}", self.rank, self.suit)
     }
 }
 
@@ -199,17 +202,35 @@ pub enum ParseCardError {
 
 impl FromStr for Card {
     type Err = ParseCardError;
+    /// Accepts a rank and a suit glyph in either order.  [`Display`] writes
+    /// the rank first (`T♥`); legacy suit-first text (`♥T`) still parses,
+    /// since rank and suit characters never overlap.  Ranks are ASCII, one
+    /// byte each save `10`, so the rank is the leading token, or the trailing
+    /// one if the leading split does not resolve.
+    ///
+    /// [`Display`]: fmt::Display
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let rank_len = if s.ends_with("10") {
+        let build = |rank: &str, suit: &str| -> Result<Self, ParseCardError> {
+            Ok(Self {
+                suit: suit.parse().map_err(|_| ParseCardError::Suit)?,
+                rank: rank.parse().map_err(|_| ParseCardError::Rank)?,
+            })
+        };
+        // Rank-first (`T♥`, `10♠`): the rank leads.
+        let lead = if s.starts_with("10") { 2 } else { 1 };
+        if let Some((rank, suit)) = s.split_at_checked(lead)
+            && let Ok(card) = build(rank, suit)
+        {
+            return Ok(card);
+        }
+        // Suit-first (`♥T`, `♠10`): the rank trails.
+        let trail = if s.ends_with("10") {
             2
         } else {
             s.chars().next_back().map_or(0, char::len_utf8)
         };
-        let border = s.len().saturating_sub(rank_len);
-        let (suit, rank) = s.split_at(border);
-        let suit: Suit = suit.parse().map_err(|_| ParseCardError::Suit)?;
-        let rank: Rank = rank.parse().map_err(|_| ParseCardError::Rank)?;
-        Ok(Self { suit, rank })
+        let (suit, rank) = s.split_at(s.len().saturating_sub(trail));
+        build(rank, suit)
     }
 }
 
@@ -1063,8 +1084,8 @@ mod tests {
         assert_eq!(hand.len(), 10);
 
         let cards: Vec<Card> = hand.iter().collect();
-        assert_eq!(cards.first().map(ToString::to_string), Some("♣A".into()));
-        assert_eq!(cards.last().map(ToString::to_string), Some("♠T".into()));
+        assert_eq!(cards.first().map(ToString::to_string), Some("A♣".into()));
+        assert_eq!(cards.last().map(ToString::to_string), Some("T♠".into()));
         assert!(cards.windows(2).all(|w| {
             let (a, b) = (w[0], w[1]);
             a.suit < b.suit || (a.suit == b.suit && a.rank < b.rank)

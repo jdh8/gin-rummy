@@ -259,7 +259,7 @@ impl From<Meld> for Hand {
     }
 }
 
-/// Concatenated cards in ascending order, e.g. `♠5♠6♠7`
+/// Concatenated cards in ascending order, e.g. `5♠6♠7♠`
 impl fmt::Display for Meld {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.iter().try_for_each(|card| write!(f, "{card}"))
@@ -294,15 +294,32 @@ impl FromStr for Meld {
             )
         }
 
+        const SELECTORS: [char; 2] = ['\u{FE0F}', '\u{FE0E}'];
+
         let mut cards = Hand::EMPTY;
         let mut rest = s.trim_ascii_start();
 
+        // The Display format is rank-first (`5♠6♠7♠`), so each card runs up to
+        // and including its suit glyph.  A string that instead opens with a
+        // suit glyph is legacy suit-first text (`♠5♠6♠7`), where a card runs up
+        // to the *next* suit glyph.
+        let suit_first = rest.chars().next().is_some_and(is_suit_char);
+
         while !rest.is_empty() {
-            let mut split = rest.char_indices().skip(1);
-            let end = split
-                .find_map(|(i, c)| is_suit_char(c).then_some(i))
-                .unwrap_or(rest.len());
-            let card: Card = rest[..end].trim_ascii_end().parse()?;
+            let end = if suit_first {
+                rest.char_indices()
+                    .skip(1)
+                    .find_map(|(i, c)| is_suit_char(c).then_some(i))
+                    .unwrap_or(rest.len())
+            } else {
+                let after_suit = rest
+                    .char_indices()
+                    .find_map(|(i, c)| is_suit_char(c).then_some(i + c.len_utf8()))
+                    .unwrap_or(rest.len());
+                // Include any variation selector trailing the suit glyph.
+                rest.len() - rest[after_suit..].trim_start_matches(SELECTORS).len()
+            };
+            let card: Card = rest[..end].trim_ascii().parse()?;
             if !cards.insert(card) {
                 return Err(ParseMeldError::RepeatedCard);
             }
@@ -416,7 +433,7 @@ impl Melds {
 }
 
 /// Melds separated by spaces, then `|` and the deadwood cards if any,
-/// e.g. `♥7♥8♥9 ♣Q♦Q♠Q | ♦A♦5`
+/// e.g. `7♥8♥9♥ Q♣Q♦Q♠ | A♦5♦`
 ///
 /// This human-oriented format is informal and not parseable.
 impl fmt::Display for Melds {
@@ -749,7 +766,7 @@ mod tests {
         assert_eq!(melds.iter().count(), 3);
         assert_eq!(melds.deadwood_cards(), "...T".parse().unwrap());
         assert_eq!(melds.deadwood(), 10);
-        assert_eq!(melds.to_string(), "♣A♣2♣3 ♦4♦5♦6 ♥7♥8♥9 | ♠T");
+        assert_eq!(melds.to_string(), "A♣2♣3♣ 4♦5♦6♦ 7♥8♥9♥ | T♠");
 
         assert_eq!(
             Melds::try_new(hand, &runs[1..]).map(|m| m.deadwood()),
@@ -788,7 +805,7 @@ mod tests {
     fn meld_parsing() {
         let run: Meld = "♠5♠6♠7".parse().unwrap();
         assert_eq!(run, Meld::run(Suit::Spades, Rank::new(5), Rank::new(7)));
-        assert_eq!(run.to_string(), "♠5♠6♠7");
+        assert_eq!(run.to_string(), "5♠6♠7♠");
         assert_eq!("S5 S6 S7".parse(), Ok(run));
         assert_eq!("s5s6s7".parse(), Ok(run));
 

@@ -9,19 +9,25 @@ fn cards() {
         suit: Suit::Spades,
         rank: Rank::A,
     };
-    assert_eq!(ace_of_spades.to_string(), "♠A");
+    assert_eq!(ace_of_spades.to_string(), "A♠");
+    // Rank-first is the canonical form; suit-first still parses.
+    assert_eq!("A♠".parse(), Ok(ace_of_spades));
     assert_eq!("♠A".parse(), Ok(ace_of_spades));
     assert_eq!("SA".parse(), Ok(ace_of_spades));
+    assert_eq!("AS".parse(), Ok(ace_of_spades));
     assert_eq!("sa".parse(), Ok(ace_of_spades));
     assert_eq!("♤\u{FE0E}A".parse(), Ok(ace_of_spades));
+    assert_eq!("A♤\u{FE0E}".parse(), Ok(ace_of_spades));
 
     let ten_of_hearts = Card {
         suit: Suit::Hearts,
         rank: Rank::T,
     };
-    assert_eq!(ten_of_hearts.to_string(), "♥T");
+    assert_eq!(ten_of_hearts.to_string(), "T♥");
+    assert_eq!("T♥".parse(), Ok(ten_of_hearts));
     assert_eq!("♥T".parse(), Ok(ten_of_hearts));
     assert_eq!("♥10".parse(), Ok(ten_of_hearts));
+    assert_eq!("10♥".parse(), Ok(ten_of_hearts));
     assert_eq!("H10".parse(), Ok(ten_of_hearts));
     assert_eq!("h10".parse(), Ok(ten_of_hearts));
 

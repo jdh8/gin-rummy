@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] — Unreleased
 
+### Changed
+
+- `Card` now displays rank-first (`T♥` instead of `♥T`), since in gin rummy,
+  as in poker, the rank carries most of the information.  This is the text and
+  serde form, so `Meld` and `Melds` follow suit (`5♠6♠7♠`, `Q♣Q♦Q♠`).  Parsing
+  is unchanged in spirit but now accepts either order, so existing suit-first
+  text and snapshots still round-trip.
+
 ### Internal
 
 - Recorded the design rationale — scope, bitset layout, solver bounds,
