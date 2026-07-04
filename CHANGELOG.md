@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — Unreleased
+
+### Changed
+
+- `best_melds` now breaks equal-deadwood ties in favor of runs over sets, so
+  a hand like `5♠6♠7♠` overlapping three sixes spreads the run rather than the
+  set — a run gins more readily because it extends at both ends.  The tie-break
+  remains documented as unspecified, and `deadwood` is unaffected (it stays a
+  pure-pip search that never records an arrangement).
+
 ## [0.1.1] — 2026-07-05
 
 ### Changed

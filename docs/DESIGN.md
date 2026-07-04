@@ -74,7 +74,12 @@ decisions as settled unless the change explicitly revisits them.
     complementary 2 5 8 J = 25; 2×60 + 2×25 = 170 < 256.
 - Which optimal arrangement `best_melds` returns is **unspecified** and may
   change between releases; only optimality and disjointness are promised.
-  The tie-break is whatever the deterministic search order yields.
+  The tie-break minimizes `(deadwood, set-meld count)` lexicographically, so
+  equal-deadwood ties favor runs over sets (a run gins more readily, extending
+  at both ends).  Both components grow monotonically down the search, so the
+  bound stays a sound lower bound.  This costs `best_melds` alone: `deadwood`
+  keeps the pure-pip prune (it records no arrangement, so the set count is
+  irrelevant and equal-deadwood branches prune immediately).
 - Correctness insurance: `tests/proptest.rs` cross-checks `deadwood`
   against an independent brute-force solver (kept naive on purpose — it
   must not share code or cleverness with the real one), and

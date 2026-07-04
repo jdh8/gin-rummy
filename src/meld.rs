@@ -508,6 +508,15 @@ const fn card_value(card: u64) -> u16 {
     if rank > 10 { 10 } else { rank }
 }
 
+/// Whether a meld bitset spans more than one suit lane, i.e. is a set
+const fn is_set(meld: u64) -> bool {
+    let lanes = (meld & 0xFFFF != 0) as u8
+        + (meld >> 16 & 0xFFFF != 0) as u8
+        + (meld >> 32 & 0xFFFF != 0) as u8
+        + (meld >> 48 != 0) as u8;
+    lanes > 1
+}
+
 /// The total deadwood value of a card set, melded or not
 ///
 /// Cards outside the 52-card deck (possible only via
@@ -538,12 +547,17 @@ fn applicable_melds(bits: u64, buf: &mut [u64; MELD_COUNT]) -> usize {
 
 /// Branch and bound over "the lowest card is deadwood or in one of its
 /// melds", the exhaustive search over maximal disjoint meld packings
-fn search(hand: u64, melds: &[u64], acc: u16, tracker: &mut Tracker<'_>) {
-    if acc >= tracker.best {
+///
+/// `sets` counts the set melds chosen so far.  It only matters to the
+/// arrangement-recording variant, where `(deadwood, sets)` is minimized
+/// lexicographically so equal-deadwood ties favor runs; both components grow
+/// monotonically down the search, so the bound stays a sound lower bound.
+fn search(hand: u64, melds: &[u64], acc: u16, sets: u16, tracker: &mut Tracker<'_>) {
+    if !tracker.improves(acc, sets) {
         return;
     }
     if hand == 0 {
-        tracker.record(acc);
+        tracker.record(acc, sets);
         return;
     }
 
@@ -552,16 +566,23 @@ fn search(hand: u64, melds: &[u64], acc: u16, tracker: &mut Tracker<'_>) {
         for &meld in melds {
             if meld & card != 0 && meld & hand == meld {
                 tracker.push(meld);
-                search(hand & !meld, melds, acc, tracker);
+                search(
+                    hand & !meld,
+                    melds,
+                    acc,
+                    sets + is_set(meld) as u16,
+                    tracker,
+                );
                 tracker.pop();
             }
         }
     }
-    search(hand & !card, melds, acc + card_value(card), tracker);
+    search(hand & !card, melds, acc + card_value(card), sets, tracker);
 }
 
 struct Tracker<'a> {
     best: u16,
+    best_sets: u16,
     chosen: [u64; 3],
     count: usize,
     best_melds: Option<&'a mut [u64; 3]>,
@@ -578,6 +599,17 @@ impl Tracker<'_> {
         }
     }
 
+    /// Whether `(acc, sets)` could still beat the best recorded arrangement.
+    /// `deadwood()` ignores the set count and stays a pure-pip search; only
+    /// `best_melds()` applies the run-favoring tie-break.
+    const fn improves(&self, acc: u16, sets: u16) -> bool {
+        if self.best_melds.is_some() {
+            acc < self.best || (acc == self.best && sets < self.best_sets)
+        } else {
+            acc < self.best
+        }
+    }
+
     const fn push(&mut self, meld: u64) {
         if self.best_melds.is_some() {
             self.chosen[self.count] = meld;
@@ -589,8 +621,9 @@ impl Tracker<'_> {
         self.count -= 1;
     }
 
-    fn record(&mut self, acc: u16) {
+    fn record(&mut self, acc: u16, sets: u16) {
         self.best = acc;
+        self.best_sets = sets;
         if let Some(best_melds) = &mut self.best_melds {
             **best_melds = [0; 3];
             best_melds[..self.count].copy_from_slice(&self.chosen[..self.count]);
@@ -610,11 +643,12 @@ pub fn deadwood(hand: Hand) -> u8 {
     let count = applicable_melds(bits, &mut buf);
     let mut tracker = Tracker {
         best: u16::MAX,
+        best_sets: u16::MAX,
         chosen: [0; 3],
         count: 0,
         best_melds: None,
     };
-    search(bits, &buf[..count], 0, &mut tracker);
+    search(bits, &buf[..count], 0, 0, &mut tracker);
 
     // An optimal remainder is meld-free — melding a leftover meld would only
     // shrink the deadwood — and the most valuable meld-free card set is worth
@@ -624,10 +658,11 @@ pub fn deadwood(hand: Hand) -> u8 {
 
 /// A best arrangement of a hand: disjoint melds minimizing deadwood
 ///
-/// Ties between optimal arrangements are broken deterministically, but which
-/// arrangement wins is unspecified and may change between releases.  Cards
-/// outside the 52-card deck (possible only via [`Hand::from_bits_retain`])
-/// are ignored.
+/// Among equal-deadwood arrangements the tie-break currently favors runs over
+/// sets — a run gins more readily because it extends at both ends — but the
+/// exact choice is unspecified and may change between releases.  Cards outside
+/// the 52-card deck (possible only via [`Hand::from_bits_retain`]) are
+/// ignored.
 ///
 /// # Panics
 ///
@@ -646,11 +681,12 @@ pub fn best_melds(hand: Hand) -> Melds {
     let mut best_melds = [0; 3];
     let mut tracker = Tracker {
         best: u16::MAX,
+        best_sets: u16::MAX,
         chosen: [0; 3],
         count: 0,
         best_melds: Some(&mut best_melds),
     };
-    search(hand.to_bits(), &buf[..count], 0, &mut tracker);
+    search(hand.to_bits(), &buf[..count], 0, 0, &mut tracker);
 
     let mut melds = [None; 3];
     for (slot, &bits) in melds.iter_mut().zip(&best_melds) {
@@ -847,5 +883,21 @@ mod tests {
         assert_eq!(deadwood(Hand::ALL), 0);
         assert_eq!(pip_sum(Hand::ALL), 340);
         assert_eq!(pip_sum(gin), 55);
+    }
+
+    #[test]
+    fn tie_break_favors_runs() {
+        // A middle-of-run card shared with a set of its rank (e.g. 5-6-7 vs
+        // three 6s) leaves 12 deadwood either way.  The arrangement is picked
+        // regardless of which suit lane sorts lowest, so the run must win in
+        // all rotations, not just when its cards happen to sort first.
+        for hand in ["567.6.6.", "6.6.567.", "6.567.6."] {
+            let melds = best_melds(hand.parse().unwrap());
+            assert_eq!(melds.deadwood(), 12, "{hand}");
+            assert!(
+                melds.iter().all(|m| m.kind() == MeldKind::Run),
+                "{hand} chose a set: {melds}",
+            );
+        }
     }
 }
