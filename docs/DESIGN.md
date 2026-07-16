@@ -139,6 +139,14 @@ decisions as settled unless the change explicitly revisits them.
   in `From<Round>`, decide in `TryFrom` which phases allow it to be
   non-default, and add both a round-trip and a corruption case to
   `tests/serde.rs`.
+- `initial_upcard` is validated as far as it can be: the pile never shrinks
+  across turn boundaries (a turn pops at most one card and pushes one
+  back), so once both players pass the upcard it is buried at
+  `discards[0]` for the rest of the round.  The validator therefore pins
+  `initial_upcard` to the pile head whenever `passes == 2` or the round is
+  still in the upcard phase; after a take the field is unverifiable and
+  trusted (it only tightens the knock limit under Oklahoma, where
+  `TryFrom` re-checks the knocker's deadwood against the resolved limit).
 
 ## Scoring split
 
@@ -160,15 +168,22 @@ decisions as settled unless the change explicitly revisits them.
   and mutate (`rules.game_target = 250;`), never via a struct literal.
   Adding a knob is therefore a minor, non-breaking change.
 
-## Variant roadmap (planned, all non-breaking)
+## Variants
 
-- **Oklahoma gin**: a new `Rules` field; `Round` resolves the effective
-  knock limit from the upcard.  `Round::knock_limit()` already exists as
-  the per-round resolution hook — callers are told to use it instead of
-  `Rules::knock_limit`.  `RoundResult` is `#[non_exhaustive]` partly to
-  leave room for an Oklahoma spade-doubling variant.
-- **Straight gin** is approximately `knock_limit: 0` (knock only on gin);
-  check school-specific details before claiming full support.
+- **Oklahoma gin** (implemented): `Rules::oklahoma` holds an `OklahomaAce`
+  policy — Pagat's base rule reads an ace upcard at its pip value (knock
+  at 1), and "some play" gin-only, hence the two variants.  `Round`
+  remembers `initial_upcard` (the card, not the resolved limit: the suit
+  keeps room for spade doubling) and `Round::knock_limit()` resolves the
+  effective limit via `Rules::knock_limit_for`, which only ever *caps*
+  `Rules::knock_limit`.  The spade-doubling variation is still future
+  work; `RoundResult` is `#[non_exhaustive]` partly to leave room for it.
+- **Straight gin** (documented, no code): exactly `knock_limit: 0`.
+  Wikipedia confirms the variant is "knocking is not allowed" with scoring
+  otherwise unchanged, and a zero limit admits only gin knocks, so this is
+  full support rather than an approximation.
+- **Hollywood scoring** (multiple simultaneous scoreboards) stays out:
+  it composes from multiple `Game`s at the application layer.
 - See the `add-variant` skill for the mechanical checklist.
 
 ## Testing strategy

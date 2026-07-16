@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] — Unreleased
+
+### Added
+
+- Oklahoma gin: the new `Rules::oklahoma` knob caps the knock limit at the
+  opening upcard's deadwood value (pictures 10), with `OklahomaAce` choosing
+  between the 1-point ace knock (Pagat's base rule) and the gin-only ace.
+  `Round::knock_limit()` resolves the effective limit as always; the new
+  `Rules::knock_limit_for` and `Round::initial_upcard` expose the pieces.
+  No preset enables Oklahoma.
+- Straight gin is documented as exactly `knock_limit: 0`: only a gin knock
+  ends the round, and scoring is unchanged.
+
+### Changed
+
+- `Round` snapshots record the opening upcard as a new `initial_upcard`
+  field, validated against the discard pile while the upcard is on offer
+  (and forever after both players pass it) and against the Oklahoma knock
+  limit.  Snapshots written by earlier versions no longer deserialize; a
+  standalone `Rules` without the `oklahoma` field still loads.
+
 ## [0.1.2] — 2026-07-05
 
 ### Changed

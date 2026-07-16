@@ -102,7 +102,32 @@ println!("{:?}", game.final_score());
 - `simulate`: greedy bots play a full game —
   `cargo run --features rand --example simulate`
 
+## Alternatives
+
+Open-source gin rummy mostly lives inside research frameworks rather than
+reusable libraries:
+
+- [OpenSpiel]'s `gin_rummy` (C++/Python) has thoroughly tested single-hand
+  rules with an Oklahoma option — but plays isolated hands only, with no
+  match play: games to 100, boxes, shutouts, and dealer rotation are out of
+  its scope.
+- [RLCard]'s environment (Python) targets reinforcement learning; its deal
+  and rewards deviate from table rules (an 11-card opening deal, no
+  undercut bonus).
+- [gin-rummy-eaai] (Java) is the minimal framework behind the EAAI-2021
+  Gin Rummy AI challenge and its 13 papers — the academic reference point,
+  though dormant since 2020 and unlicensed.
+
+This crate aims to be the reusable one: a dependency-free core, an exact
+solver, a validated state machine covering complete matches, and
+school-by-school rule knobs including Oklahoma gin.  Bots and strength
+benchmarks live in the sibling [gin-rummy-engine] crate.
+
 [gin rummy]: https://www.pagat.com/rummy/ginrummy.html
+[OpenSpiel]: https://github.com/google-deepmind/open_spiel
+[RLCard]: https://github.com/datamllab/rlcard
+[gin-rummy-eaai]: https://github.com/tneller/gin-rummy-eaai
+[gin-rummy-engine]: https://crates.io/crates/gin-rummy-engine
 [contract-bridge]: https://crates.io/crates/contract-bridge
 [mod-hand]: https://docs.rs/gin-rummy/latest/gin_rummy/hand/
 [mod-meld]: https://docs.rs/gin-rummy/latest/gin_rummy/meld/

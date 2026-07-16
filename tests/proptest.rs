@@ -2,8 +2,8 @@
 //! cross-check of the deadwood solver, and random legal playouts
 
 use gin_rummy::{
-    Card, Hand, Holding, Meld, Phase, Player, Rank, Round, RoundResult, Rules, Suit, best_melds,
-    deadwood,
+    Card, Hand, Holding, Meld, OklahomaAce, Phase, Player, Rank, Round, RoundResult, Rules, Suit,
+    best_melds, deadwood,
 };
 use proptest::prelude::*;
 
@@ -51,6 +51,21 @@ fn meld() -> impl Strategy<Value = Meld> {
 /// A hand of at most 11 cards, the sizes that occur in play
 fn game_hand() -> impl Strategy<Value = Hand> {
     proptest::sample::subsequence(deck(), 0..=11).prop_map(Hand::from_iter)
+}
+
+/// Modern rules, sometimes with an Oklahoma knock limit, so playouts
+/// exercise upcard-capped (and, on an ace, gin-only) knocking
+fn rules() -> impl Strategy<Value = Rules> {
+    prop_oneof![
+        Just(None),
+        Just(Some(OklahomaAce::One)),
+        Just(Some(OklahomaAce::GinOnly))
+    ]
+    .prop_map(|oklahoma| {
+        let mut rules = Rules::default();
+        rules.oklahoma = oklahoma;
+        rules
+    })
 }
 
 /// An independent reference solver: enumerate melds by card arithmetic and
@@ -199,6 +214,7 @@ proptest! {
 
     #[test]
     fn random_playouts_stay_consistent(
+        rules in rules(),
         order in Just(deck()).prop_shuffle(),
         seeds in proptest::collection::vec(any::<u8>(), 120),
     ) {
@@ -206,7 +222,7 @@ proptest! {
             order[..10].iter().copied().collect(),
             order[10..20].iter().copied().collect(),
         ];
-        let round = Round::from_deal(Rules::default(), Player::One, hands, order[20], order[21..].to_vec());
+        let round = Round::from_deal(rules, Player::One, hands, order[20], order[21..].to_vec());
         let mut round = round.unwrap();
         prop_assert!(conserved(&round));
 

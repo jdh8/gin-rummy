@@ -20,7 +20,7 @@ pub use hand::{Card, Hand, Holding, Rank};
 pub use meld::{Meld, MeldKind, Melds, best_melds, deadwood, pip_sum};
 pub use player::Player;
 pub use round::{Phase, Round, RoundResult};
-pub use rules::{Rules, Shutout};
+pub use rules::{OklahomaAce, Rules, Shutout};
 
 use core::fmt::{self, Write as _};
 use core::str::FromStr;

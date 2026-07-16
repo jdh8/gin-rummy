@@ -9,7 +9,14 @@
 //! `Rules` is `#[non_exhaustive]`: start from a preset and adjust fields,
 //! e.g. `Rules { game_target: 250, ..Rules::default() }` does not compile,
 //! but mutating `rules.game_target = 250;` does.  This keeps room for future
-//! variants (an Oklahoma knock limit, straight gin) without breakage.
+//! variants (an Oklahoma spade multiplier, Hollywood scoring) without
+//! breakage.
+//!
+//! Two variants ride on existing knobs: Oklahoma gin is
+//! [`Rules::oklahoma`], and straight gin — no knocking short of gin — is
+//! exactly `knock_limit: 0`.
+
+use crate::Card;
 
 /// What happens to the winner's total when the loser scored nothing
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,6 +30,21 @@ pub enum Shutout {
     Flat(u16),
 }
 
+/// How an ace upcard sets the knock limit in Oklahoma gin
+///
+/// Pagat gives the base rule as the upcard's value, so an ace allows a
+/// 1-point knock, and records that some tables instead demand gin
+/// outright.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum OklahomaAce {
+    /// The ace counts its pip value: knock at 1 or less
+    One,
+    /// The ace demands gin: the knock limit is 0
+    GinOnly,
+}
+
 /// The scoring rules of a game
 ///
 /// All fields are public knobs; see the [module documentation](self) for the
@@ -31,8 +53,18 @@ pub enum Shutout {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Rules {
-    /// The most deadwood a knocker may keep (10 in every common school)
+    /// The most deadwood a knocker may keep: 10 in every common school,
+    /// and `0` plays straight gin — only a gin knock ends the round
     pub knock_limit: u8,
+
+    /// Oklahoma gin: the opening upcard caps the knock limit at its
+    /// deadwood value (pictures 10, aces per [`OklahomaAce`]), or `None`
+    /// for a fixed [`knock_limit`](Self::knock_limit)
+    ///
+    /// No preset turns this on; enable it atop any of them.  Some tables
+    /// also double the hand score on a spade upcard — not modeled yet.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub oklahoma: Option<OklahomaAce>,
 
     /// Bonus for going gin: 25 modern and palace, 20 classic
     pub gin_bonus: u16,
@@ -76,6 +108,7 @@ impl Rules {
     pub const fn new() -> Self {
         Self {
             knock_limit: 10,
+            oklahoma: None,
             gin_bonus: 25,
             big_gin_bonus: Some(31),
             undercut_bonus: 25,
@@ -119,6 +152,28 @@ impl Rules {
             game_bonus: 0,
             shutout: Shutout::Flat(0),
             ..Self::new()
+        }
+    }
+
+    /// The knock limit in effect for a round opened by `initial_upcard`
+    ///
+    /// Under [`oklahoma`](Self::oklahoma) the upcard's deadwood value caps
+    /// [`knock_limit`](Self::knock_limit) — the house limit only ever
+    /// tightens, never widens; without Oklahoma it passes through
+    /// unchanged.  [`Round::knock_limit`](crate::Round::knock_limit)
+    /// resolves this per round.
+    #[must_use]
+    #[inline]
+    pub const fn knock_limit_for(&self, initial_upcard: Card) -> u8 {
+        let value = match self.oklahoma {
+            None => return self.knock_limit,
+            Some(OklahomaAce::GinOnly) if initial_upcard.rank.get() == 1 => 0,
+            Some(_) => initial_upcard.rank.deadwood(),
+        };
+        if value < self.knock_limit {
+            value
+        } else {
+            self.knock_limit
         }
     }
 }
@@ -167,8 +222,29 @@ mod tests {
 
         for rules in [modern, classic, palace] {
             assert_eq!(rules.knock_limit, 10);
+            assert_eq!(rules.oklahoma, None);
             assert!(rules.undercut_on_tie);
             assert_eq!(rules.game_target, 100);
         }
+    }
+
+    #[test]
+    fn oklahoma_knock_limits() {
+        let card = |s: &str| s.parse::<Card>().unwrap();
+        let mut rules = Rules::default();
+        assert_eq!(rules.knock_limit_for(card("7♦")), 10);
+
+        rules.oklahoma = Some(OklahomaAce::One);
+        assert_eq!(rules.knock_limit_for(card("7♦")), 7);
+        assert_eq!(rules.knock_limit_for(card("Q♥")), 10);
+        assert_eq!(rules.knock_limit_for(card("A♣")), 1);
+
+        rules.oklahoma = Some(OklahomaAce::GinOnly);
+        assert_eq!(rules.knock_limit_for(card("7♦")), 7);
+        assert_eq!(rules.knock_limit_for(card("A♣")), 0);
+
+        // The upcard only caps the limit; a stricter house limit stays.
+        rules.knock_limit = 3;
+        assert_eq!(rules.knock_limit_for(card("7♦")), 3);
     }
 }

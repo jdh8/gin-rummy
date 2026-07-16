@@ -234,6 +234,8 @@ pub struct Round {
     stock: Vec<Card>,
     /// Face-up discard pile; the top card is the last element.
     discards: Vec<Card>,
+    /// The opening upcard, remembered for the Oklahoma knock limit.
+    initial_upcard: Card,
     phase: Phase,
     turn: Player,
     /// Upcard offers declined so far (0..=2).
@@ -288,6 +290,7 @@ impl Round {
             hands,
             stock,
             discards: vec![upcard],
+            initial_upcard: upcard,
             phase: Phase::Upcard,
             turn: dealer.opponent(),
             passes: 0,
@@ -386,12 +389,23 @@ impl Round {
 
     /// The knock limit in effect for this round
     ///
-    /// Currently always [`Rules::knock_limit`]; a future Oklahoma variant
-    /// resolves this from the upcard instead.
+    /// [`Rules::knock_limit`], capped by the opening upcard's value under
+    /// an Oklahoma ruleset ([`Rules::oklahoma`]).  Read the limit here
+    /// rather than from the rules.
     #[must_use]
     #[inline]
     pub const fn knock_limit(&self) -> u8 {
-        self.rules.knock_limit
+        self.rules.knock_limit_for(self.initial_upcard)
+    }
+
+    /// The opening upcard that seeded the discard pile
+    ///
+    /// Remembered even after the card is drawn; under [`Rules::oklahoma`]
+    /// it sets [`knock_limit`](Self::knock_limit).
+    #[must_use]
+    #[inline]
+    pub const fn initial_upcard(&self) -> Card {
+        self.initial_upcard
     }
 
     /// The player who knocked or declared big gin, if any
@@ -738,6 +752,8 @@ mod repr {
         WrongCounts,
         #[error("The pass counter is out of range or contradicts the acting player")]
         BadUpcardState,
+        #[error("The initial upcard contradicts the discard pile")]
+        BadInitialUpcard,
         #[error("A flag or component contradicts the phase")]
         PhaseMismatch,
         #[error("The spread is not disjoint melds over the knocker's cards and the layoffs")]
@@ -762,6 +778,7 @@ mod repr {
         hands: [Hand; 2],
         stock: Vec<Card>,
         discards: Vec<Card>,
+        initial_upcard: Card,
         phase: Phase,
         turn: Player,
         passes: u8,
@@ -779,6 +796,7 @@ mod repr {
                 hands: round.hands,
                 stock: round.stock,
                 discards: round.discards,
+                initial_upcard: round.initial_upcard,
                 phase: round.phase,
                 turn: round.turn,
                 passes: round.passes,
@@ -875,6 +893,17 @@ mod repr {
                 return Err(InvalidRound::PhaseMismatch);
             }
 
+            // While the upcard is on offer the pile is exactly that card,
+            // and once both players pass it, it is buried for good: the
+            // pile never shrinks across turns, so it stays `discards[0]`.
+            // After a take the field is unverifiable and trusted.
+            if (repr.phase == Phase::Upcard || repr.passes == 2)
+                && repr.discards.first() != Some(&repr.initial_upcard)
+            {
+                return Err(InvalidRound::BadInitialUpcard);
+            }
+            let knock_limit = repr.rules.knock_limit_for(repr.initial_upcard);
+
             let knock = match repr.phase {
                 Phase::Upcard => {
                     if repr.passes > 1
@@ -934,7 +963,7 @@ mod repr {
                     if state.knocker_deadwood == 0 {
                         return Err(InvalidRound::PhaseMismatch);
                     }
-                    if state.knocker_deadwood > repr.rules.knock_limit {
+                    if state.knocker_deadwood > knock_limit {
                         return Err(InvalidRound::BadDeadwood);
                     }
                     if turn != state.knocker.opponent() {
@@ -973,7 +1002,7 @@ mod repr {
                             if state.knocker != knocker || state.knocker_deadwood == 0 {
                                 return Err(InvalidRound::BadResult);
                             }
-                            if state.knocker_deadwood > repr.rules.knock_limit {
+                            if state.knocker_deadwood > knock_limit {
                                 return Err(InvalidRound::BadDeadwood);
                             }
                             let defender = knocker.opponent();
@@ -1043,6 +1072,7 @@ mod repr {
                 hands: repr.hands,
                 stock: repr.stock,
                 discards: repr.discards,
+                initial_upcard: repr.initial_upcard,
                 phase: repr.phase,
                 turn: repr.turn,
                 passes: repr.passes,

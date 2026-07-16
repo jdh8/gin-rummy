@@ -2,7 +2,8 @@
 
 use gin_rummy::round::{DealError, RoundError};
 use gin_rummy::{
-    Card, Hand, Melds, Phase, Player, Rank, Round, RoundResult, Rules, Suit, best_melds, deadwood,
+    Card, Hand, Melds, OklahomaAce, Phase, Player, Rank, Round, RoundResult, Rules, Suit,
+    best_melds, deadwood,
 };
 
 fn card(s: &str) -> Card {
@@ -443,6 +444,126 @@ fn layoff_indices() {
         RoundError::NoSuchMeld(usize::MAX),
     );
     round.lay_off(card("♣4"), 0).unwrap();
+}
+
+#[test]
+fn oklahoma_upcard_caps_the_knock_limit() {
+    let mut rules = Rules::default();
+    rules.oklahoma = Some(OklahomaAce::One);
+
+    // The ♠4 upcard caps the knock limit at 4 for the whole round, even
+    // after the card is taken.
+    let mut round = deal_with(rules, "A23.456.789.3", "JQK.JQK.JQK.T", "♠4", &[]);
+    assert_eq!(round.knock_limit(), 4);
+    assert_eq!(round.initial_upcard(), card("♠4"));
+
+    round.take_discard().unwrap();
+    assert_eq!(round.knock_limit(), 4);
+
+    // Keeping ♣2♣3 and ♠3♠4 as deadwood busts the limit...
+    let fat = best_melds(round.hand(Player::One) - card("♣A").into());
+    assert_eq!(
+        round.knock(card("♣A"), fat).unwrap_err(),
+        RoundError::TooMuchDeadwood {
+            deadwood: 12,
+            limit: 4,
+        },
+    );
+
+    // ...while keeping only the taken ♠4 knocks at exactly the limit.
+    let melds = best_melds(round.hand(Player::One) - card("♠3").into());
+    assert_eq!(melds.deadwood(), 4);
+    round.knock(card("♠3"), melds).unwrap();
+    assert_eq!(
+        round.finish_layoffs().unwrap(),
+        RoundResult::Knock {
+            winner: Player::One,
+            margin: 6,
+        },
+    );
+}
+
+#[test]
+fn oklahoma_ace_upcard() {
+    // Base Oklahoma reads the ace at its pip value: knock at 1.
+    let mut rules = Rules::default();
+    rules.oklahoma = Some(OklahomaAce::One);
+    let mut round = deal_with(rules, "A23.456.789.A", "JQK.JQK.JQK.T", "♥A", &["♠K"]);
+    assert_eq!(round.knock_limit(), 1);
+
+    round.pass().unwrap();
+    round.pass().unwrap();
+    assert_eq!(round.draw_stock().unwrap(), card("♠K"));
+    let melds = best_melds(round.hand(Player::One) - card("♠K").into());
+    assert_eq!(melds.deadwood(), 1);
+    round.knock(card("♠K"), melds).unwrap();
+    assert_eq!(
+        round.finish_layoffs().unwrap(),
+        RoundResult::Knock {
+            winner: Player::One,
+            margin: 9,
+        },
+    );
+
+    // The gin-only school forbids that same 1-point knock...
+    rules.oklahoma = Some(OklahomaAce::GinOnly);
+    let mut round = deal_with(rules, "A23.456.789.A", "JQK.JQK.JQK.T", "♥A", &["♠K"]);
+    assert_eq!(round.knock_limit(), 0);
+
+    round.pass().unwrap();
+    round.pass().unwrap();
+    round.draw_stock().unwrap();
+    let melds = best_melds(round.hand(Player::One) - card("♠K").into());
+    assert_eq!(
+        round.knock(card("♠K"), melds).unwrap_err(),
+        RoundError::TooMuchDeadwood {
+            deadwood: 1,
+            limit: 0,
+        },
+    );
+
+    // ...but gin still ends the round.
+    let mut round = deal_with(rules, "A234.567.9TJ.", "78.89J.QK.235", "♥A", &["♠K"]);
+    round.pass().unwrap();
+    round.pass().unwrap();
+    let drawn = round.draw_stock().unwrap();
+    let gin = best_melds(round.hand(Player::One) - drawn.into());
+    assert_eq!(gin.deadwood(), 0);
+    round.knock(drawn, gin).unwrap();
+    assert_eq!(round.phase(), Phase::Finished);
+}
+
+#[test]
+fn straight_gin_is_knock_limit_zero() {
+    let mut rules = Rules::default();
+    rules.knock_limit = 0;
+
+    let mut round = deal_with(rules, "A234.567.9TJ.", "78.89J.QK.235", "♠A", &["♠K"]);
+    assert_eq!(round.knock_limit(), 0);
+    round.pass().unwrap();
+    round.pass().unwrap();
+    let drawn = round.draw_stock().unwrap();
+
+    // No knocking short of gin: shedding ♣A leaves the drawn ♠K as
+    // deadwood.
+    let fat = best_melds(round.hand(Player::One) - card("♣A").into());
+    assert_eq!(
+        round.knock(card("♣A"), fat).unwrap_err(),
+        RoundError::TooMuchDeadwood {
+            deadwood: 10,
+            limit: 0,
+        },
+    );
+
+    let gin = best_melds(round.hand(Player::One) - drawn.into());
+    round.knock(drawn, gin).unwrap();
+    assert_eq!(
+        round.result(),
+        Some(RoundResult::Gin {
+            winner: Player::One,
+            deadwood: 72,
+        }),
+    );
 }
 
 #[test]

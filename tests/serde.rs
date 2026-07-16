@@ -52,8 +52,8 @@ fn card(s: &str) -> Card {
     s.parse().unwrap()
 }
 
-/// A mid-layoff round: One knocked with ♠J deadwood, Two laid off the ♣4.
-fn layoff_round() -> Round {
+/// A fresh deal still in the upcard phase, with the ♠J on offer.
+fn fresh_round() -> Round {
     let hands: [Hand; 2] = [
         "A23.456.789.T".parse().unwrap(),
         "45.89J.JQK.23".parse().unwrap(),
@@ -63,8 +63,12 @@ fn layoff_round() -> Round {
         .iter()
         .filter(|&c| !hands[0].contains(c) && !hands[1].contains(c) && c != upcard)
         .collect();
+    Round::from_deal(Rules::default(), Player::Two, hands, upcard, stock).unwrap()
+}
 
-    let mut round = Round::from_deal(Rules::default(), Player::Two, hands, upcard, stock).unwrap();
+/// A mid-layoff round: One knocked with ♠J deadwood, Two laid off the ♣4.
+fn layoff_round() -> Round {
+    let mut round = fresh_round();
     round.take_discard().unwrap();
     let melds = best_melds(round.hand(Player::One) - card("♠T").into());
     round.knock(card("♠T"), melds).unwrap();
@@ -75,17 +79,9 @@ fn layoff_round() -> Round {
 #[test]
 fn round_snapshots_roundtrip() {
     // A fresh deal.
-    let hands: [Hand; 2] = [
-        "A23.456.789.T".parse().unwrap(),
-        "45.89J.JQK.23".parse().unwrap(),
-    ];
-    let upcard = card("♠J");
-    let stock: Vec<Card> = Hand::ALL
-        .iter()
-        .filter(|&c| !hands[0].contains(c) && !hands[1].contains(c) && c != upcard)
-        .collect();
-    let fresh = Round::from_deal(Rules::default(), Player::Two, hands, upcard, stock).unwrap();
+    let fresh = fresh_round();
     let json = serde_json::to_value(&fresh).unwrap();
+    assert_eq!(json["initial_upcard"], json!("J♠"));
     assert_eq!(serde_json::from_value::<Round>(json).unwrap(), fresh);
 
     // Mid-layoff, with a spread and a laid-off card.
@@ -151,6 +147,31 @@ fn corrupt_snapshots_are_rejected() {
     assert!(patched(&|v| v["passes"] = json!(9)).is_err());
     // A stray forced-stock flag.
     assert!(patched(&|v| v["forced_stock"] = json!(true)).is_err());
+
+    // Oklahoma reads the knock limit from the initial upcard: the ♠J
+    // upcard allows One's 10-point knock, a rewritten ♦4 upcard does not.
+    assert!(patched(&|v| v["rules"]["oklahoma"] = json!("One")).is_ok());
+    assert!(
+        patched(&|v| {
+            v["rules"]["oklahoma"] = json!("One");
+            v["initial_upcard"] = json!("4♦");
+        })
+        .is_err()
+    );
+    // Without Oklahoma, a taken upcard is unverifiable — and harmless.
+    assert!(patched(&|v| v["initial_upcard"] = json!("4♦")).is_ok());
+    // A pre-Oklahoma `Rules` snapshot still loads.
+    assert!(
+        patched(&|v| {
+            v["rules"].as_object_mut().unwrap().remove("oklahoma");
+        })
+        .is_ok()
+    );
+
+    // While the upcard is on offer, it must head the discard pile.
+    let mut wrong = serde_json::to_value(fresh_round()).unwrap();
+    wrong["initial_upcard"] = json!("2♥");
+    assert!(serde_json::from_value::<Round>(wrong).is_err());
 
     // A finished round with a falsified margin is rejected.
     let mut done = layoff_round();
